@@ -146,9 +146,9 @@ blender -b -P scripts/fuse_and_render_blender.py -- \
 
 如需代码级拼接高斯表示，可使用 `scripts/sample_mesh_to_gaussians.py` 将 AIGC mesh 均匀采样为带颜色点云，再转换为 2DGS 初始化点云。
 
-## LeRobot ACT Experiments
+## LeRobot ACT 实验
 
-The ACT experiments were completed locally on a Windows laptop with an RTX 4060 Laptop GPU. Because the official CALVIN split is large, the joint model uses a lightweight sampled subset: approximately 1k episodes from each of Env-A, Env-B, and Env-C. All datasets were converted to LeRobot v3.0 and renamed to ACT-compatible keys:
+ACT 实验在本地 Windows 笔记本 RTX 4060 Laptop GPU 上完成。由于官方 CALVIN 划分体量较大，联合模型采用轻量采样子集：从环境 A、B、C 中各取约 1k 条 episode。所有数据集均转换为 LeRobot v3.0 格式，并统一重命名为 ACT 兼容字段：
 
 ```text
 image       -> observation.images.image
@@ -157,7 +157,7 @@ state       -> observation.state
 actions     -> action
 ```
 
-### Train Environment-B Baseline
+### 训练环境 B 基线模型
 
 ```powershell
 lerobot-train `
@@ -172,7 +172,7 @@ lerobot-train `
   --wandb.enable=false
 ```
 
-### Train Multi-environment A+B+C
+### 训练 A+B+C 多环境联合模型
 
 ```powershell
 lerobot-train `
@@ -187,7 +187,7 @@ lerobot-train `
   --wandb.enable=false
 ```
 
-### Zero-shot Test on Environment D
+### 在环境 D 上进行 Zero-shot 测试
 
 ```powershell
 python D:\cv_final_task2\lerobot\eval_act_l1.py `
@@ -205,14 +205,12 @@ python D:\cv_final_task2\lerobot\eval_act_l1.py `
   --max-batches 200
 ```
 
-Measured zero-shot Env-D Action L1:
+环境 D 上测得的 zero-shot Action L1 结果如下：
 
-| Model | Training data | Steps | Action L1 |
+| 模型 | 训练数据 | 训练步数 | Action L1 |
 |---|---:|---:|---:|
-| ACT-B | Env-B only | 1,000 | 0.360068 |
-| ACT-ABC | Env-A/B/C sampled subset | 1,000 | 0.310211 |
+| ACT-B | 仅环境 B | 1,000 | 0.360068 |
+| ACT-ABC | 环境 A/B/C 采样子集 | 1,000 | 0.310211 |
 
-The joint model reduces Env-D zero-shot Action L1 by approximately 13.85%.
-The logged 1k-step training losses are 2.917 for ACT-B and 2.934 for ACT-ABC, parsed from console logs recorded every 50 steps.
-
+联合模型将环境 D 上的 zero-shot Action L1 误差降低约 13.85%。从每 50 step 记录一次的控制台日志中解析得到，1k step 时 ACT-B 的训练 loss 为 2.917，ACT-ABC 的训练 loss 为 2.934。
 
