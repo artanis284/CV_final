@@ -1,0 +1,177 @@
+\documentclass[10pt]{ctexart}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\newcommand{\resultimage}[2][\linewidth]{%
+  \IfFileExists{#2}{\includegraphics[width=#1]{#2}}%
+  {\fbox{\parbox[c][4cm][c]{#1}{\centering Pending result\\\nolinkurl{#2}}}}%
+}
+
+\title{基于 2DGS 与 AIGC 的多源资产融合及 LeRobot ACT 跨环境泛化实验报告}
+\author{姓名：何毅卓{\hspace{3cm}} \quad 学号：24300980004{\hspace{3cm}}}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\noindent\textbf{GitHub Repository:} \url{https://github.com/artanis284/CV_final}\\
+\textbf{Model Weights:} \url{https://drive.google.com/drive/folders/1Mn-dgOzEQUyMsfwXLPx0SZvPlfBLO5ii}\\
+
+\begin{abstract}
+本项目包含两个部分。第一部分围绕 2D Gaussian Splatting (2DGS) 与 AIGC 资产生成，分别通过真实多视角重建、文本到 3D 生成和单图到 3D 生成获得三个独立物体，并将其融合到 Mip-NeRF 360 真实场景中进行统一渲染。第二部分基于 LeRobot 框架训练 ACT 策略，比较仅使用 CALVIN 环境 B 与混合环境 A/B/C 训练时，在未见环境 D 上的 zero-shot 泛化性能。实验重点分析不同 3D 资产来源在几何、纹理与计算成本上的差异，以及 ACT 动作分块机制在视觉分布偏移下的鲁棒性。
+\end{abstract}
+
+\section{任务背景}
+神经渲染和生成式 3D 技术正在从单一重建任务走向真实场景编辑与资产级组合。2DGS 使用显式高斯面片表达场景，具有训练和渲染效率高的优势；threestudio 通过预训练 2D 扩散模型和 SDS loss 将文本监督蒸馏到 3D 表达中；Magic123 则利用单张图像和扩散先验补全不可见视角。另一方面，具身智能策略学习要求模型在环境外观变化下保持稳定控制能力，ACT 通过预测未来一段动作序列降低逐步控制的噪声积累。
+
+\section{数据集与实验设置}
+\subsection{3D 视觉数据}
+\textbf{物体 A} 使用手机环绕拍摄真实物体，抽帧后由 COLMAP 估计相机位姿，并使用 2DGS 重建。\\
+\textbf{物体 B} 使用文本 prompt ``a small ceramic robot planter, glossy white body, tiny green succulent, studio lighting, high quality''，在 threestudio 中通过 SDS loss 优化 3D 表达并导出 mesh。\\
+\textbf{物体 C} 使用手机拍摄单张真实物体照片，去背景后输入 Magic123 生成完整 3D 模型。\\
+\textbf{背景场景} 选择 Mip-NeRF 360 的 counter 场景，使用 2DGS 作为统一环境背景。
+
+\subsection{ACT 数据}
+机器人策略部分使用 CALVIN 数据集。基础模型仅使用环境 B 训练；联合模型使用环境 A、B、C 混合训练；两个模型均在未见环境 D 上进行 zero-shot 测试。
+
+\begin{table}[H]
+\centering
+\caption{ACT 训练超参数}
+\begin{tabular}{ll}
+\toprule
+Item & Value \\
+\midrule
+Policy & ACT \\
+Backbone & ResNet-18 \\
+Hidden dimension & 512 \\
+Transformer encoder/decoder layers & 4 / 7 \\
+Attention heads & 8 \\
+Chunk size & 100 \\
+Optimizer & AdamW \\
+Learning rate & $1\times10^{-5}$ \\
+Batch size & 2 \\
+Loss & ActionL1Loss + KL regularization \\
+Training steps & 1,000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{方法}
+\subsection{工程实现与个人贡献}
+实验在一台无外网、NVIDIA 470 驱动、CUDA 11.2 Toolkit 的双 RTX 3090 工作站上完成。本人构建了离线 wheelhouse，解决了 PyTorch cu113、2DGS CUDA rasterizer、tiny-cuda-nn、nerfacc、nvdiffrast、envlight 与 threestudio 的版本和编译依赖；完成了手机数据采集、COLMAP 去畸变、2DGS 训练评测、SD2.1/Zero123 离线权重部署、Magic123 输入抠图、资产导出及融合脚本。第三方算法实现均保持原项目许可证，本仓库仅维护实验配置、数据流程、运行入口和融合逻辑。
+
+\subsection{2DGS 重建}
+2DGS 将场景表达为一组可微高斯面片，通过相机投影和 alpha blending 完成快速渲染。真实物体和背景均先由 COLMAP 恢复相机内外参，再优化高斯的位置、尺度、旋转、不透明度和颜色参数。
+
+\subsection{Text-to-3D 与 SDS Loss}
+物体 B 的生成采用 SDS loss。给定文本 prompt，预训练扩散模型提供图像空间梯度，将多视角渲染结果推向符合文本语义的分布。该路径不需要真实物体数据，但几何准确性依赖扩散先验，常出现多视角不一致和局部结构漂移。
+
+\subsection{Single-image-to-3D}
+物体 C 使用单张去背景图作为强外观约束，并结合扩散先验补全不可见视角。与纯文本生成相比，它能更好保留输入图像正面纹理；但背面和遮挡区域仍主要来自模型先验。
+
+\subsection{表达统一与融合渲染}
+本项目采用 Mesh 统一融合路线。threestudio 与 Magic123 资产导出为带纹理 Mesh；2DGS 背景和物体 A 通过深度融合/TSDF 提取为表面 Mesh，用 Blender 的 PLY/OBJ 导入器统一到同一世界坐标系。随后通过手工标定尺度、旋转和平移，将三个物体放置到 counter 场景中，并使用环绕相机路径生成多视角漫游视频。原始高斯 PLY 与 Mesh 资产均予以保留，分别用于高质量神经渲染和跨表示融合。
+
+该方法的优点是工程实现稳定，便于同时处理显式高斯和隐式/mesh 资产。缺点是 Blender 中的 PLY proxy 不能完全复现 2DGS 的各向异性高斯渲染效果。若追求代码级统一，可将 AIGC mesh 采样为点云，并初始化为小尺度高斯，再与背景 2DGS 点云拼接后继续联合优化。
+
+\section{实验结果}
+\subsection{背景重建的定量结果}
+\begin{table}[H]
+\centering
+\caption{Mip-NeRF 360 Counter 场景的 2DGS 测试集指标。}
+\begin{tabular}{rrrr}
+\toprule
+Iterations & SSIM $\uparrow$ & PSNR (dB) $\uparrow$ & LPIPS $\downarrow$ \\
+\midrule
+3,000 & 0.8593 & 26.2582 & 0.1905 \\
+\bottomrule
+\end{tabular}
+\end{table}
+另外，counter 场景与物体 A 均完成 30,000 次迭代训练，并使用 30k checkpoint 提取 mesh 参与最终融合渲染；由于离线实验过程中未完整保存 30k metrics 控制台日志，表中仅报告可复核的 3k 定量指标。
+
+\subsection{3D 资产质量对比}
+\begin{table}[H]
+\centering
+\caption{三种 3D 资产生成方式的实测现象对比。}
+\begin{tabular}{llll}
+\toprule
+Asset & Geometry Accuracy & Texture Detail & Runtime \\
+\midrule
+A: Multi-view + 2DGS & 最准确，有漂浮片 & 真实纹理 & 30,000 it \\
+B: Text-to-3D + SDS & 语义正确，几何较弱 & 较平滑 & 3,000 it \\
+C: Single-image + Magic123 & 正面较准，背面靠先验 & 正面较好 & 3,000 it \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\resultimage[0.31\linewidth]{../outputs/figures/object_a_render.png}
+\resultimage[0.31\linewidth]{../outputs/figures/object_b_render.png}
+\resultimage[0.31\linewidth]{../outputs/figures/object_c_render.png}
+\caption{物体 A/B/C 的代表性渲染结果。其中 B/C 使用导出阶段的 RGB/法线/Mask 诊断图，A 使用最终融合场景中的裁剪视图。}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.32\linewidth}
+\resultimage{../outputs/figures/fusion_walkthrough_start.png}
+\caption{起始视角}
+\end{subfigure}
+\begin{subfigure}{0.32\linewidth}
+\resultimage{../outputs/figures/fusion_walkthrough_middle.png}
+\caption{中间视角}
+\end{subfigure}
+\begin{subfigure}{0.32\linewidth}
+\resultimage{../outputs/figures/fusion_walkthrough_end.png}
+\caption{结束视角}
+\end{subfigure}
+\caption{三个资产融合到 Mip-NeRF 360 counter 场景后的多视角漫游渲染截图。最终视频保存为 \texttt{outputs/fusion/final\_walkthrough.mp4}。}
+\end{figure}
+
+\subsection{ACT 收敛与泛化结果}
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.48\linewidth}
+\resultimage{../outputs/figures/act_training_loss_record.png}
+\caption{训练 loss 记录}
+\end{subfigure}
+\begin{subfigure}{0.48\linewidth}
+\resultimage{../outputs/figures/act_zero_shot_action_l1.png}
+\caption{Env-D zero-shot Action L1}
+\end{subfigure}
+\caption{ACT 训练与验证曲线。左图由本地训练日志每 50 step 解析得到，右图为在未见环境 D 上真实评测得到的 zero-shot Action L1 误差。}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{环境 D zero-shot 测试结果。}
+\begin{tabular}{lllll}
+\toprule
+Model & Training Data & Steps & Action L1 Error $\downarrow$ & Samples \\
+\midrule
+ACT-B & Env B only & 1,000 & 0.360068 & 800 \\
+ACT-ABC & Env A+B+C sampled subset & 1,000 & 0.310211 & 800 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+ACT-ABC 相比 ACT-B 将环境 D 上的 zero-shot Action L1 从 0.3601 降低到 0.3102，相对下降约 13.85\%。受存储空间与训练时间限制，联合模型使用环境 A、B、C 各约 1k 条 episode 构成轻量混合训练集；两组实验保持相同 ACT 网络、batch size、训练步数和评测脚本。
+重新记录日志的训练显示，ACT-B 的 1k step 训练 loss 为 2.917，ACT-ABC 的 1k step 训练 loss 为 2.934；联合训练损失略高，但在未见环境 D 上取得了更低动作误差，说明多环境数据提升了视觉分布偏移下的泛化表现。
+
+\section{现象分析}
+多视角 2DGS 重建的几何与纹理最依赖观测质量。当手机视频覆盖角度充分、COLMAP 位姿稳定时，物体 A 的几何边界和真实纹理最可信；若反光、透明或纹理弱，则高斯会出现漂浮点和局部模糊。文本到 3D 的物体 B 语义自由度最高，不需要采集数据，适合快速获得创意资产，但 SDS 监督来自 2D 先验，几何闭合性和多视角一致性弱于真实重建。单图到 3D 的物体 C 介于两者之间，正面细节接近输入图像，背面几何与纹理则主要由生成先验补全。
+
+ACT 实验中，环境 B 单独训练模型通常在训练分布内收敛更快，但面对环境 D 的视觉偏移时，视觉编码器容易将背景、光照或纹理变化误认为任务状态变化。A/B/C 联合训练模型虽然训练损失可能略高或收敛更慢，但更容易学习与任务相关的跨环境视觉特征。ACT 的动作分块机制一次预测未来 $K$ 个动作，减少逐帧视觉噪声对控制输出的即时扰动，因此在轻微视觉分布偏移下具有一定鲁棒性；但当视觉偏移导致关键物体定位错误时，长动作块也可能放大早期误差，表现为连续动作偏离目标。
+
+\section{结论}
+本项目完成了从真实物体重建、AIGC 资产生成、真实场景融合到机器人策略泛化评估的完整实验设计。3D 视觉部分表明，多源资产的主要难点不在单个模型生成，而在坐标、尺度、材质与渲染表达的统一。ACT 部分表明，多环境联合训练能提升 zero-shot 泛化能力，而动作分块在视觉扰动下兼具平滑性优势与错误延续风险。
+
+\end{document}

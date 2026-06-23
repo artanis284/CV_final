@@ -1,0 +1,11 @@
+experiment_name: background_mipnerf360_garden
+dataset: mipnerf360
+scene: garden
+resolution: 4
+white_background: false
+iterations: 30000
+densify_until_iter: 15000
+opacity_reset_interval: 3000
+eval: true
+notes: >
+  Outdoor Mip-NeRF 360 scene reconstructed as the unified environment background.

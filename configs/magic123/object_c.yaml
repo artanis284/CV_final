@@ -1,0 +1,12 @@
+experiment_name: object_c_single_image_to_3d
+method: magic123
+input_image: data/object_c/object_c_rgba.png
+training:
+  coarse_steps: 5000
+  refine_steps: 5000
+  learning_rate: 0.001
+export:
+  format: obj
+  texture_resolution: 1024
+notes: >
+  Foreground object image should be background-removed before Magic123 optimization.

@@ -1,0 +1,35 @@
+name: cv-final
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - cudatoolkit=11.8
+  - pytorch
+  - torchvision
+  - torchaudio
+  - numpy
+  - scipy
+  - pandas
+  - matplotlib
+  - seaborn
+  - opencv
+  - pillow
+  - imageio
+  - imageio-ffmpeg
+  - trimesh
+  - pycolmap
+  - pyyaml
+  - tqdm
+  - pip:
+      - wandb
+      - swanlab
+      - open3d
+      - plyfile
+      - tyro
+      - einops
+      - hydra-core
+      - omegaconf

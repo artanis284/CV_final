@@ -1,0 +1,16 @@
+experiment_name: object_b_text_to_3d_sds
+method: threestudio_sds
+prompt: "a small ceramic robot planter, glossy white body, tiny green succulent, studio lighting, high quality"
+negative_prompt: "low quality, blurry, distorted, extra limbs, text, watermark"
+guidance:
+  type: stable-diffusion-sds
+  pretrained_model_name_or_path: stabilityai/stable-diffusion-2-1-base
+training:
+  max_steps: 10000
+  batch_size: 1
+  learning_rate: 0.01
+export:
+  format: obj
+  texture_resolution: 1024
+notes: >
+  Generate an implicit 3D asset from a text prompt with SDS loss, then export textured mesh.
